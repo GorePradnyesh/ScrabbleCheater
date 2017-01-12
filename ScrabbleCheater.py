@@ -3,10 +3,10 @@ import re
 import itertools
 import collections
 
-from PyDictionary import PyDictionary
+import enchant
 
 #init english dictionary
-dictionary = PyDictionary()
+dictionary = enchant.Dict("en_US")
 
 # Upper limit of the word length
 minWordLength = 3
@@ -19,7 +19,7 @@ readline.parse_and_bind('set editing-mode vi')
 #setup regex
 reCompPosChar = re.compile("^([a-z]{1})([0-9]{1})$",re.DOTALL)
 reCompPreChars = re.compile("^([a-z]{1,8})$", re.DOTALL)
-
+reCompContains = re.compile("^\*([a-z])$", re.DOTALL)
 
 class PositionalChar:
     charValue = '\0'
@@ -33,10 +33,12 @@ def main():
     print "Prompt: (STOP to quit)\n"
     print "1. Max word length : ", maxWordLength, "\n"
     print "2. \"CharacterPostion\" e.g. f4 to indicate fixed char in word, index at 0\n"
-    print "3. \"CharCharChar\" e.g. fybn to indicate available chars to construct the word"
+    print "3. \"CharCharChar\" e.g. fybn to indicate available chars to construct the word\n"
+    print "4. \"*Char\" e.g. *f contains f in the substring"
 
     availableChars = []
     positionMap = {}
+    containsChar = None
     while True:
         line = raw_input("")
         if line == "STOP":
@@ -54,10 +56,13 @@ def main():
             if preChars:
                 availableChars = preChars.group(1)
                 continue
-    words = generateWords(availableChars, positionMap)
+            containsCharRe = reCompContains.search(line)
+            if containsCharRe:
+                containsChar = str(containsCharRe.group(1))
+    words = generateWords(availableChars, positionMap, containsChar)
     print "\n".join(words)
 
-def generateWords(availableChars, positionMap):
+def generateWords(availableChars, positionMap, containsChar):
     validWords = []
     # sort position map
     minWordLength = 3
@@ -68,6 +73,8 @@ def generateWords(availableChars, positionMap):
     print "minword: ", minWordLength
 
     combinationArr = []
+    if containsChar:
+        availableChars = availableChars + containsChar
     for localLen in range(minWordLength, maxWordLength + 1): #index 0
         combinationArr = combinationArr + [seq for seq in itertools.permutations(availableChars, localLen)]
 
@@ -78,27 +85,14 @@ def generateWords(availableChars, positionMap):
             insertTuple = (positionMap[position], )
             combinationTuple = combinationTuple[:position] + insertTuple + combinationTuple[position:]
         # form the final word and check validity
-        word = ''.join(combinationTuple)
+        word = str(''.join(combinationTuple))
         if checkWordValidity(word):
-            validWords.append(word)
+            if not containsChar or containsChar in word:
+                validWords.append(word)
     return validWords
 
 
 def checkWordValidity(word):
-    return True
-    result = dictionary.meaning(word)
-    if not result:
-        return False
-    else:
-        return True
-
-
-def test():
-
-    result = dictionary.meaning("Life")
-    if not result:
-        print "Invalid word"
-    else:
-        print result['Noun']
+    return dictionary.check(word)
 
 main()
