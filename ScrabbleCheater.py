@@ -20,6 +20,8 @@ readline.parse_and_bind('set editing-mode vi')
 reCompPosChar = re.compile("^([a-z]{1})([0-9]{1})$",re.DOTALL)
 reCompPreChars = re.compile("^([a-z]{1,8})$", re.DOTALL)
 reCompContains = re.compile("^\*([a-z])$", re.DOTALL)
+reCompContains = re.compile("^\^([a-z])$", re.DOTALL)
+reCompRegEx = re.compile("^REGEX:(.*)$", re.DOTALL)
 
 class PositionalChar:
     charValue = '\0'
@@ -30,19 +32,24 @@ class PositionalChar:
         self.position = inPosition
 
 def main():
-    print "Prompt: (STOP to quit)\n"
+    print "Prompt: (DONE to quit)\n"
     print "1. Max word length : ", maxWordLength, "\n"
     print "2. \"CharacterPostion\" e.g. f4 to indicate fixed char in word, index at 0\n"
     print "3. \"CharCharChar\" e.g. fybn to indicate available chars to construct the word\n"
-    print "4. \"*Char\" e.g. *f contains f in the substring"
+    print "4. \"*Char\" e.g. *f contains f in the substring\n"
+    print "5. \"^Char\" e.g. ^y ends with the character\n"
+    print "6. \"REGEX:*\" e.g. REGEX:^([a-z]{1})([0-9]{1})$  regular expression\n"
 
     availableChars = []
     positionMap = {}
     containsChar = None
+    regularExpression = None
     while True:
         line = raw_input("")
-        if line == "STOP":
+        if line == "DONE":
             break;
+        elif line == "STOP":
+            return 0;
         else:
             posChar = reCompPosChar.search(line)
             # positional character search
@@ -56,13 +63,22 @@ def main():
             if preChars:
                 availableChars = preChars.group(1)
                 continue
+
+            # contains char
             containsCharRe = reCompContains.search(line)
             if containsCharRe:
                 containsChar = str(containsCharRe.group(1))
-    words = generateWords(availableChars, positionMap, containsChar)
+                continue
+
+            #regExr
+            regexStrGroup = reCompRegEx.search(line)
+            if regexStrGroup:
+                regularExpression = str(regexStrGroup.group(1))
+
+    words = generateWords(availableChars, positionMap, containsChar, regularExpression)
     print "\n".join(words)
 
-def generateWords(availableChars, positionMap, containsChar):
+def generateWords(availableChars, positionMap, containsChar, regularExpression):
     validWords = []
     # sort position map
     minWordLength = 3
@@ -79,13 +95,22 @@ def generateWords(availableChars, positionMap, containsChar):
         combinationArr = combinationArr + [seq for seq in itertools.permutations(availableChars, localLen)]
 
     for combinationTuple in combinationArr:
-        word = ''.join(combinationTuple)
-        # add the positional characters
-        for position in positionMap:
-            insertTuple = (positionMap[position], )
-            combinationTuple = combinationTuple[:position] + insertTuple + combinationTuple[position:]
-        # form the final word and check validity
-        word = str(''.join(combinationTuple))
+        if not regularExpression:
+            # add the positional characters
+            for position in positionMap:
+                insertTuple = (positionMap[position], )
+                combinationTuple = combinationTuple[:position] + insertTuple + combinationTuple[position:]
+            word = str(''.join(combinationTuple))
+        else:
+            searchString = ''.join(combinationTuple)
+            compiledSearchExpression = re.compile(regularExpression, re.DOTALL)
+            result = compiledSearchExpression.search(searchString)
+            if result:
+                word = searchString
+            else:
+                word = ""
+            # form the final word and check validity
+
         if checkWordValidity(word):
             if not containsChar or containsChar in word:
                 validWords.append(word)
@@ -93,6 +118,8 @@ def generateWords(availableChars, positionMap, containsChar):
 
 
 def checkWordValidity(word):
+    if not word or word == "":
+        return False
     return dictionary.check(word)
 
 main()
